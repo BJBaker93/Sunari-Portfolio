@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SUNARI Magazine — White Portfolio</title>
+  <meta name="description" content="A minimal white portfolio magazine reader with straight-on page turns." />
+  <style>
+    :root {
+      --page-w: 420px;
+      --page-h: 563.5px;
+      --radius: 8px;
+      --paper: #fff;
+      --ink: rgba(20,20,20,.62);
+      --line: rgba(0,0,0,.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #fff;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: geometricPrecision;
+      overscroll-behavior: none;
+    }
+
+    body {
+      opacity: 1;
+      user-select: none;
+    }
+
+    .cyclorama {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 38%, rgba(255,255,255,1) 0 42%, rgba(248,248,247,.88) 72%, rgba(241,241,239,.72) 100%),
+        linear-gradient(to bottom, #fff 0 58%, #f7f7f5 100%);
+    }
+
+    .cyclorama::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(1180px, 82vw);
+      height: min(820px, 66vh);
+      transform: translate(-50%, -38%);
+      background: radial-gradient(ellipse, rgba(0,0,0,.055), rgba(0,0,0,0) 64%);
+      filter: blur(34px);
+      opacity: .42;
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      opacity: 0;
+      transition: opacity 420ms ease;
+      perspective: 1800px;
+      perspective-origin: 50% 48%;
+      pointer-events: none;
+    }
+
+    body.ready .stage { opacity: 1; }
+
+    .shell {
+      position: fixed;
+      left: 50%;
+      top: 48%;
+      width: calc(var(--page-w) * 2);
+      height: var(--page-h);
+      transform-style: preserve-3d;
+      cursor: grab;
+      touch-action: none;
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
+      transition:
+        left 360ms cubic-bezier(.2,.78,.2,1),
+        top 360ms cubic-bezier(.2,.78,.2,1);
+      contain: layout style;
+      will-change: left, top;
+    }
+
+    .shell:active,
+    .shell.dragging { cursor: grabbing; }
+
+    .magazine {
+      position: absolute;
+      inset: 0;
+      transform-style: preserve-3d;
+      transform: translateZ(0);
+      cursor: grab;
+      filter:
+        drop-shadow(0 32px 34px rgba(0,0,0,.16))
+        drop-shadow(0 8px 10px rgba(0,0,0,.10));
+      transition: filter 240ms ease;
+    }
+
+    .magazine.dragging,
+    .magazine.turning {
+      filter:
+        drop-shadow(0 38px 42px rgba(0,0,0,.18))
+        drop-shadow(0 10px 12px rgba(0,0,0,.11));
+    }
+
+    .stack,
+    .ambient-shadow,
+    .paper-shadow,
+    .center-fold {
+      position: absolute;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .ambient-shadow {
+      inset: 2px -9px -11px 8px;
+      border-radius: calc(var(--radius) + 5px);
+      background: rgba(0,0,0,.12);
+      filter: blur(18px);
+      transform: translateZ(-34px);
+      opacity: .46;
+    }
+
+    .stack.under {
+      inset: 7px -7px -9px 7px;
+      border-radius: calc(var(--radius) + 4px);
+      background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(216,216,214,.68));
+      transform: translateZ(-20px);
+      box-shadow: 0 18px 34px rgba(0,0,0,.13);
+      opacity: .72;
+    }
+
+    .stack.edge-right {
+      top: 4px;
+      right: -7px;
+      bottom: -7px;
+      width: 10px;
+      border-radius: 0 calc(var(--radius) + 3px) calc(var(--radius) + 3px) 0;
+      background:
+        repeating-linear-gradient(to bottom, rgba(250,250,248,.9) 0 1px, rgba(182,182,178,.42) 1px 4px),
+        linear-gradient(to right, rgba(238,238,236,.9), rgba(204,204,201,.72));
+      transform: translateZ(-11px) rotateY(-3deg);
+      transform-origin: left center;
+      opacity: .8;
+    }
+
+    .stack.edge-bottom {
+      left: 7px;
+      right: -8px;
+      bottom: -8px;
+      height: 11px;
+      border-radius: 0 0 calc(var(--radius) + 3px) calc(var(--radius) + 3px);
+      background:
+        repeating-linear-gradient(to right, rgba(252,252,250,.9) 0 1px, rgba(185,185,181,.38) 1px 5px),
+        linear-gradient(to bottom, rgba(238,238,236,.88), rgba(206,206,202,.72));
+      transform: translateZ(-12px) rotateX(3deg);
+      transform-origin: top center;
+      opacity: .82;
+    }
+
+    .magazine.mode-cover .stack.under,
+    .magazine.mode-cover .ambient-shadow { left: 50%; }
+
+    .magazine.mode-cover .stack.edge-bottom { left: calc(50% + 7px); }
+    .magazine.mode-cover .center-fold { opacity: 0; }
+
+    .magazine.mode-back .stack.under,
+    .magazine.mode-back .ambient-shadow { left: 50%; }
+
+    .magazine.mode-back .stack.edge-bottom { left: calc(50% + 7px); }
+    .magazine.mode-back .center-fold { opacity: 0; }
+
+    .page,
+    .turn-sheet {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      transform-style: preserve-3d;
+      background: var(--paper);
+    }
+
+    .page {
+      overflow: hidden;
+      z-index: 2;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.08),
+        inset 0 1px 0 rgba(255,255,255,.62),
+        inset 0 -1px 0 rgba(0,0,0,.04);
+      backface-visibility: hidden;
+    }
+
+    .page.left {
+      left: 0;
+      border-radius: var(--radius) 2px 2px var(--radius);
+      transform-origin: right center;
+    }
+
+    .page.right {
+      left: 50%;
+      border-radius: 2px var(--radius) var(--radius) 2px;
+      transform-origin: left center;
+    }
+
+    .page.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .page img,
+    .face img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #fff;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+      filter: brightness(1.01) contrast(1.015) saturate(1);
+    }
+
+    .page::before,
+    .face::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.06), rgba(0,0,0,.018) 48%, rgba(255,255,255,.04)),
+        radial-gradient(ellipse at 84% 8%, rgba(255,255,255,.16), transparent 32%);
+      mix-blend-mode: multiply;
+      opacity: .28;
+    }
+
+    .page.left::after,
+    .page.right::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      opacity: .36;
+      mix-blend-mode: multiply;
+    }
+
+    .page.left::after {
+      background: linear-gradient(to left, rgba(0,0,0,.10), rgba(0,0,0,.025) 12%, rgba(255,255,255,0) 34%);
+    }
+
+    .page.right::after {
+      background: linear-gradient(to right, rgba(0,0,0,.09), rgba(0,0,0,.022) 12%, rgba(255,255,255,0) 34%);
+    }
+
+    .magazine.mode-cover .page.right::after,
+    .magazine.mode-back .page.right::after {
+      opacity: .16;
+      background:
+        linear-gradient(110deg, rgba(255,255,255,.09), rgba(0,0,0,.06), rgba(255,255,255,.04)),
+        linear-gradient(to right, rgba(0,0,0,.08), rgba(0,0,0,0) 20%);
+    }
+
+    .center-fold {
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      transform: translateX(-1px) translateZ(9px);
+      background: linear-gradient(to right, rgba(0,0,0,.16), rgba(255,255,255,.72), rgba(0,0,0,.11));
+      opacity: .46;
+      z-index: 5;
+      transition: opacity 220ms ease;
+    }
+
+    .paper-shadow {
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 10%;
+      transform: translateZ(13px);
+      background: radial-gradient(ellipse at center, rgba(0,0,0,.20), rgba(0,0,0,0) 68%);
+      filter: blur(8px);
+      opacity: 0;
+      z-index: 11;
+      transition: opacity 100ms ease;
+    }
+
+    .magazine.turning .paper-shadow { opacity: var(--turn-shadow, .22); }
+
+    .turn-sheet {
+      overflow: visible;
+      display: none;
+      z-index: 30;
+      pointer-events: none;
+      will-change: transform, filter;
+      transform: translateZ(24px);
+    }
+
+    .turn-sheet.active { display: block; }
+
+    .turn-sheet.next {
+      left: 50%;
+      transform-origin: left center;
+    }
+
+    .turn-sheet.prev {
+      left: 0;
+      transform-origin: right center;
+    }
+
+    .face {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #fff;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      transform-style: preserve-3d;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.07),
+        0 12px 28px rgba(0,0,0,calc(.09 + var(--shadow-strength, .08))),
+        inset 0 1px 0 rgba(255,255,255,.54);
+    }
+
+    .turn-sheet.next .face.front { border-radius: 2px var(--radius) var(--radius) 2px; transform: translateZ(.9px); opacity: var(--front-opacity, 1); }
+    .turn-sheet.next .face.back  { border-radius: var(--radius) 2px 2px var(--radius); transform: rotateY(180deg) translateZ(.9px); opacity: var(--back-opacity, 1); }
+    .turn-sheet.prev .face.front { border-radius: var(--radius) 2px 2px var(--radius); transform: translateZ(.9px); opacity: var(--front-opacity, 1); }
+    .turn-sheet.prev .face.back  { border-radius: 2px var(--radius) var(--radius) 2px; transform: rotateY(180deg) translateZ(.9px); opacity: var(--back-opacity, 1); }
+
+    .turn-sheet::before,
+    .turn-sheet::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 40;
+      backface-visibility: hidden;
+      opacity: var(--shade, .12);
+      mix-blend-mode: multiply;
+    }
+
+    .turn-sheet.next::before {
+      border-radius: 2px var(--radius) var(--radius) 2px;
+      background:
+        radial-gradient(ellipse at calc(100% - var(--edge-x, 0%)) 50%, rgba(255,255,255,.42), transparent 30%),
+        linear-gradient(90deg, rgba(255,255,255,0) 0 14%, rgba(0,0,0,.16) 46%, rgba(0,0,0,.04) 70%, rgba(255,255,255,.36) 100%);
+      transform: translateX(calc(var(--progress, 0) * 11%));
+    }
+
+    .turn-sheet.prev::before {
+      border-radius: var(--radius) 2px 2px var(--radius);
+      background:
+        radial-gradient(ellipse at var(--edge-x, 0%) 50%, rgba(255,255,255,.42), transparent 30%),
+        linear-gradient(270deg, rgba(255,255,255,0) 0 14%, rgba(0,0,0,.16) 46%, rgba(0,0,0,.04) 70%, rgba(255,255,255,.36) 100%);
+      transform: translateX(calc(var(--progress, 0) * -11%));
+    }
+
+    .turn-sheet::after {
+      width: 4px;
+      right: auto;
+      background: linear-gradient(to right, rgba(0,0,0,.20), rgba(255,255,255,.42), rgba(0,0,0,.03));
+      opacity: calc(.08 + var(--progress, 0) * .23);
+      filter: blur(.2px);
+    }
+
+    .turn-sheet.next::after { left: 0; }
+    .turn-sheet.prev::after { right: 0; left: auto; }
+
+    .loader,
+    .hud {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      color: rgba(0,0,0,.36);
+      font-size: 9px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+
+    .loader {
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(0,0,0,.28);
+    }
+
+    body.ready .loader {
+      opacity: 0;
+      transform: translate(-50%, -50%) translateY(-4px);
+    }
+
+    .hud {
+      bottom: max(45px, calc(env(safe-area-inset-bottom) + 45px));
+      opacity: 0;
+    }
+
+    body.ready .hud { opacity: .7; }
+    body.idle .hud { opacity: .28; }
+
+    .scrubber {
+      position: fixed;
+      left: 50%;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      width: min(520px, 60vw);
+      transform: translateX(-50%);
+      z-index: 21;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0;
+      transition: opacity 240ms ease;
+      user-select: none;
+      padding: 8px 0;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    body.ready .scrubber { opacity: .24; }
+    .scrubber:hover,
+    .scrubber:focus-within,
+    body.scrubbing .scrubber { opacity: .78; }
+
+    .scrubber input[type="range"] {
+      width: 100%;
+      margin: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      height: 18px;
+      background: transparent;
+      cursor: ew-resize;
+      touch-action: pan-x;
+    }
+
+    .scrubber input[type="range"]::-webkit-slider-runnable-track {
+      height: 1px;
+      background: rgba(0,0,0,.22);
+    }
+
+    .scrubber input[type="range"]::-moz-range-track {
+      height: 1px;
+      background: rgba(0,0,0,.22);
+    }
+
+    .scrubber input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 8px;
+      height: 8px;
+      margin-top: -3.5px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(0,0,0,.54);
+      box-shadow: none;
+    }
+
+    .scrubber input[type="range"]::-moz-range-thumb {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(0,0,0,.54);
+      box-shadow: none;
+    }
+
+    .scrub-readout {
+      width: 48px;
+      color: rgba(0,0,0,.38);
+      font-size: 9px;
+      letter-spacing: .1em;
+      text-align: right;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 760px) {
+      :root { --radius: 7px; }
+      .scrubber { width: min(560px, 76vw); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="cyclorama" aria-hidden="true"></div>
+
+  <div class="loader" id="loader">Loading 0%</div>
+
+  <main class="stage" id="stage" aria-label="SUNARI magazine reader">
+    <section class="shell" id="shell" aria-live="polite">
+      <div class="magazine mode-cover" id="magazine">
+        <div class="ambient-shadow" aria-hidden="true"></div>
+        <div class="stack under" aria-hidden="true"></div>
+        <div class="stack edge-right" aria-hidden="true"></div>
+        <div class="stack edge-bottom" aria-hidden="true"></div>
+
+        <article class="page left is-hidden" id="leftPage" aria-label="Left page">
+          <img id="leftImg" alt="" draggable="false" />
+        </article>
+        <article class="page right" id="rightPage" aria-label="Right page">
+          <img id="rightImg" alt="" draggable="false" />
+        </article>
+
+        <div class="center-fold" aria-hidden="true"></div>
+        <div class="paper-shadow" aria-hidden="true"></div>
+
+        <div class="turn-sheet" id="turnSheet" aria-hidden="true">
+          <div class="face front"><img id="turnFront" alt="" draggable="false" /></div>
+          <div class="face back"><img id="turnBack" alt="" draggable="false" /></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="hud" id="hud">Cover / 132</div>
+  <div class="scrubber" id="scrubber" aria-label="Page scrubber">
+    <input id="pageSlider" type="range" min="1" max="132" step="1" value="1" aria-label="Jump to page" />
+    <div class="scrub-readout" id="scrubReadout">1 / 132</div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const PAGE_COUNT = 132;
+      const END_STATE = 66;
+      const FIRST_SPREAD = 1;
+      const LAST_SPREAD = 65;
+      const PAGE_ASPECT = 1200 / 1610;
+
+      const pad = (number) => String(number).padStart(3, '0');
+      const pagePath = (index) => `assets/pages/page-${pad(index + 1)}.webp`;
+      const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+      const body = document.body;
+      const shell = document.getElementById('shell');
+      const magazine = document.getElementById('magazine');
+      const leftPage = document.getElementById('leftPage');
+      const rightPage = document.getElementById('rightPage');
+      const leftImg = document.getElementById('leftImg');
+      const rightImg = document.getElementById('rightImg');
+      const sheet = document.getElementById('turnSheet');
+      const turnFront = document.getElementById('turnFront');
+      const turnBack = document.getElementById('turnBack');
+      const hud = document.getElementById('hud');
+      const loader = document.getElementById('loader');
+      const scrubber = document.getElementById('scrubber');
+      const pageSlider = document.getElementById('pageSlider');
+      const scrubReadout = document.getElementById('scrubReadout');
+
+      let state = 0;
+      let ready = false;
+      let turn = null;
+      let idleTimer = null;
+      let layout = { pageW: 420, pageH: 563, spineX: 0, spineY: 0, mode: 'cover' };
+      const loaded = new Set();
+      const imageStore = [];
+
+      function statePages(nextState) {
+        if (nextState <= 0) {
+          return { mode: 'cover', left: null, right: 0, label: 'Cover / 132' };
+        }
+        if (nextState >= END_STATE) {
+          return { mode: 'back', left: null, right: PAGE_COUNT - 1, label: 'Back cover / 132' };
+        }
+        const left = 1 + (nextState - 1) * 2;
+        const right = left + 1;
+        return { mode: 'spread', left, right, label: `Pages ${left + 1}-${right + 1} / ${PAGE_COUNT}` };
+      }
+
+      function layoutMagazine(mode = statePages(state).mode, instant = false) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const marginX = Math.max(32, vw * 0.08);
+        const marginY = Math.max(82, vh * 0.14);
+        const maxSpreadW = Math.max(320, vw - marginX * 2);
+        const maxH = Math.max(360, vh - marginY * 2);
+        const pageW = Math.min(maxSpreadW / 2, maxH * PAGE_ASPECT, 520);
+        const pageH = pageW / PAGE_ASPECT;
+        const centerX = vw / 2;
+        const centerY = vh * 0.475;
+
+        const shellLeft =
+          mode === 'spread'
+            ? centerX - pageW
+            : centerX - pageW * 1.5;
+
+        shell.style.transitionDuration = instant ? '1ms' : '';
+        document.documentElement.style.setProperty('--page-w', `${pageW}px`);
+        document.documentElement.style.setProperty('--page-h', `${pageH}px`);
+        shell.style.left = `${shellLeft}px`;
+        shell.style.top = `${centerY - pageH / 2}px`;
+
+        layout.pageW = pageW;
+        layout.pageH = pageH;
+        layout.spineX = shellLeft + pageW;
+        layout.spineY = centerY;
+        layout.mode = mode;
+
+        window.clearTimeout(layout._timer);
+        if (instant) {
+          window.requestAnimationFrame(() => { shell.style.transitionDuration = ''; });
+        }
+      }
+
+      function setPage(el, img, index) {
+        if (index == null || index < 0 || index >= PAGE_COUNT) {
+          img.removeAttribute('src');
+          img.alt = '';
+          el.classList.add('is-hidden');
+          return;
+        }
+        const src = pagePath(index);
+        if (img.getAttribute('src') !== src) img.src = src;
+        img.alt = `SUNARI magazine page ${index + 1}`;
+        el.classList.remove('is-hidden');
+      }
+
+      function stateFromPage(pageNumber) {
+        const page = Math.round(clamp(pageNumber, 1, PAGE_COUNT));
+        if (page <= 1) return 0;
+        if (page >= PAGE_COUNT) return END_STATE;
+        return clamp(Math.ceil((page - 1) / 2), FIRST_SPREAD, LAST_SPREAD);
+      }
+
+      function representativePageForState(nextState) {
+        if (nextState <= 0) return 1;
+        if (nextState >= END_STATE) return PAGE_COUNT;
+        return 2 + (nextState - 1) * 2;
+      }
+
+      function updateScrubber(nextState = state) {
+        const page = representativePageForState(nextState);
+        if (document.activeElement !== pageSlider && !body.classList.contains('scrubbing')) {
+          pageSlider.value = String(page);
+        }
+        scrubReadout.textContent = `${page} / ${PAGE_COUNT}`;
+      }
+
+      function applyMode(mode) {
+        magazine.classList.toggle('mode-cover', mode === 'cover');
+        magazine.classList.toggle('mode-back', mode === 'back');
+        magazine.classList.toggle('mode-spread', mode === 'spread');
+      }
+
+      function render(nextState = state, instantLayout = false) {
+        const data = statePages(nextState);
+        applyMode(data.mode);
+        setPage(leftPage, leftImg, data.left);
+        setPage(rightPage, rightImg, data.right);
+        hud.textContent = data.label;
+        updateScrubber(nextState);
+        layoutMagazine(data.mode, instantLayout);
+      }
+
+      function setSheetImages(frontIndex, backIndex) {
+        const frontSrc = pagePath(frontIndex);
+        const backSrc = pagePath(backIndex);
+
+        if (turnFront.getAttribute('src') !== frontSrc) turnFront.src = frontSrc;
+        if (turnBack.getAttribute('src') !== backSrc) turnBack.src = backSrc;
+
+        turnFront.alt = `Turning page ${frontIndex + 1}`;
+        turnBack.alt = `Reverse side page ${backIndex + 1}`;
+        sheet.dataset.frontPage = String(frontIndex + 1);
+        sheet.dataset.backPage = String(backIndex + 1);
+      }
+
+      function prepareTurn(direction, targetState) {
+        const current = statePages(state);
+        const target = statePages(targetState);
+
+        if (direction === 'next') {
+          if (state === 0) {
+            applyMode('spread');
+            setPage(leftPage, leftImg, target.left);
+            setPage(rightPage, rightImg, target.right);
+            setSheetImages(current.right, target.left);
+          } else if (target.mode === 'back') {
+            applyMode('spread');
+            setPage(leftPage, leftImg, current.left);
+            setPage(rightPage, rightImg, target.right);
+            setSheetImages(current.right, target.right);
+          } else {
+            applyMode('spread');
+            setPage(leftPage, leftImg, current.left);
+            setPage(rightPage, rightImg, target.right);
+            setSheetImages(current.right, target.left);
+          }
+        } else {
+          if (state === END_STATE) {
+            applyMode('spread');
+            setPage(leftPage, leftImg, target.left);
+            setPage(rightPage, rightImg, target.right);
+            setSheetImages(current.right, target.right);
+          } else if (target.mode === 'cover') {
+            applyMode('spread');
+            setPage(leftPage, leftImg, null);
+            setPage(rightPage, rightImg, target.right);
+            setSheetImages(current.left, target.right);
+          } else {
+            applyMode('spread');
+            setPage(leftPage, leftImg, target.left);
+            setPage(rightPage, rightImg, current.right);
+            setSheetImages(current.left, target.right);
+          }
+        }
+      }
+
+      function sheetAngle(direction, progress) {
+        return direction === 'next' ? -180 * progress : 180 * progress;
+      }
+
+      function setTurnProgress(progress, withTransition = false) {
+        if (!turn) return;
+        const p = clamp(progress);
+        const soft = Math.sin(p * Math.PI);
+        const angle = sheetAngle(turn.direction, p);
+        const directionSign = turn.direction === 'next' ? 1 : -1;
+        const yPull = turn.yPull || 0;
+        const twist = yPull * soft * 7.2 * directionSign;
+        const curl = (0.5 - p) * soft * 1.8 * directionSign;
+        const lift = 18 + soft * 28;
+
+        sheet.style.transition = withTransition ? 'transform 520ms cubic-bezier(.16,.84,.19,1)' : 'none';
+        sheet.style.transform = `rotateY(${angle}deg) rotateX(${twist}deg) rotateZ(${curl}deg) translateZ(${lift}px)`;
+        sheet.style.setProperty('--progress', p.toFixed(4));
+        sheet.style.setProperty('--edge-x', `${(p * 100).toFixed(2)}%`);
+        sheet.style.setProperty('--front-opacity', p < .505 ? '1' : '0');
+        sheet.style.setProperty('--back-opacity', p >= .495 ? '1' : '0');
+        sheet.style.setProperty('--shade', (0.08 + soft * 0.23).toFixed(4));
+        sheet.style.setProperty('--shadow-strength', (0.08 + soft * 0.16).toFixed(4));
+        magazine.style.setProperty('--turn-shadow', (soft * 0.30).toFixed(4));
+        turn.progress = p;
+      }
+
+      function revealActivity() {
+        body.classList.remove('idle');
+        window.clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(() => body.classList.add('idle'), 2200);
+      }
+
+      function startTurn(direction, event) {
+        if (!ready || turn) return false;
+        if (direction === 'next' && state >= END_STATE) return false;
+        if (direction === 'prev' && state <= 0) return false;
+
+        const targetState = state + (direction === 'next' ? 1 : -1);
+        prepareTurn(direction, targetState);
+
+        sheet.className = `turn-sheet active ${direction}`;
+        sheet.style.transition = 'none';
+        magazine.classList.add('turning', 'dragging');
+        shell.classList.add('dragging');
+        body.classList.add('turning');
+        revealActivity();
+
+        turn = {
+          direction,
+          targetState,
+          startX: event.clientX,
+          startY: event.clientY,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          lastT: performance.now(),
+          velocity: 0,
+          progress: 0,
+          pageWidth: layout.pageW,
+          pageHeight: layout.pageH,
+          pointerId: event.pointerId,
+          yPull: 0
+        };
+
+        try { shell.setPointerCapture(event.pointerId); } catch (_) {}
+        setTurnProgress(0);
+        return true;
+      }
+
+      function progressFromPointer(event) {
+        if (!turn) return 0;
+        const dx = event.clientX - turn.startX;
+        const distance = turn.direction === 'next' ? -dx : dx;
+        return clamp(distance / Math.max(120, turn.pageWidth * 0.88));
+      }
+
+      function updatePointer(event) {
+        if (!turn) return;
+        const now = performance.now();
+        const dt = Math.max(1, now - turn.lastT);
+        const dx = event.clientX - turn.lastX;
+        turn.velocity = turn.direction === 'next' ? -dx / dt : dx / dt;
+        turn.lastX = event.clientX;
+        turn.lastY = event.clientY;
+        turn.lastT = now;
+        turn.yPull = clamp((event.clientY - turn.startY) / Math.max(160, turn.pageHeight * .52), -.55, .55);
+        setTurnProgress(progressFromPointer(event));
+      }
+
+      function animateTurn(toProgress, done) {
+        if (!turn) return;
+        const from = turn.progress;
+        const fromYPull = turn.yPull || 0;
+        const start = performance.now();
+        const duration = Math.max(190, Math.min(620, Math.abs(toProgress - from) * 690));
+
+        function frame(now) {
+          if (!turn) return;
+          const t = clamp((now - start) / duration);
+          const e = ease(t);
+          const p = from + (toProgress - from) * e;
+          turn.yPull = fromYPull * (1 - e);
+          setTurnProgress(p);
+          if (t < 1) requestAnimationFrame(frame);
+          else done();
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function cleanupTurn(committed) {
+        if (!turn) return;
+        const finalState = committed ? turn.targetState : state;
+        sheet.className = 'turn-sheet';
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+        sheet.style.removeProperty('--progress');
+        sheet.style.removeProperty('--edge-x');
+        sheet.style.removeProperty('--front-opacity');
+        sheet.style.removeProperty('--back-opacity');
+        sheet.style.removeProperty('--shade');
+        sheet.style.removeProperty('--shadow-strength');
+        magazine.style.removeProperty('--turn-shadow');
+        magazine.classList.remove('turning', 'dragging');
+        shell.classList.remove('dragging');
+        body.classList.remove('turning');
+        state = finalState;
+        turn = null;
+        render(state);
+        revealActivity();
+      }
+
+      function finishTurn(event) {
+        if (!turn) return;
+        const movedX = Math.abs(event.clientX - turn.startX);
+        const movedY = Math.abs(event.clientY - turn.startY);
+        const click = movedX < 8 && movedY < 8;
+        const commit = click || turn.progress > .4 || turn.velocity > .43;
+        animateTurn(commit ? 1 : 0, () => cleanupTurn(commit));
+      }
+
+      function snap(direction) {
+        if (!ready || turn) return;
+        const fake = {
+          clientX: direction === 'next' ? layout.spineX + layout.pageW * .78 : layout.spineX - layout.pageW * .78,
+          clientY: layout.spineY + layout.pageH * .46,
+          pointerId: -1
+        };
+        if (!startTurn(direction, fake)) return;
+        animateTurn(1, () => cleanupTurn(true));
+      }
+
+      function pointerDirection(event) {
+        if (state === 0) return 'next';
+        if (state === END_STATE) return 'prev';
+        return event.clientX < layout.spineX ? 'prev' : 'next';
+      }
+
+      shell.addEventListener('pointerdown', (event) => {
+        if (!ready || turn || event.button > 0) return;
+        if (event.target.closest('.scrubber')) return;
+        event.preventDefault();
+        startTurn(pointerDirection(event), event);
+      });
+
+      shell.addEventListener('pointermove', (event) => {
+        if (!turn || event.pointerId !== turn.pointerId) return;
+        event.preventDefault();
+        updatePointer(event);
+      });
+
+      shell.addEventListener('pointerup', (event) => {
+        if (!turn || event.pointerId !== turn.pointerId) return;
+        event.preventDefault();
+        finishTurn(event);
+      });
+
+      shell.addEventListener('pointercancel', () => {
+        if (!turn) return;
+        animateTurn(0, () => cleanupTurn(false));
+      });
+
+      function jumpToPage(pageNumber) {
+        if (!ready) return;
+        if (turn) cleanupTurn(false);
+        state = stateFromPage(pageNumber);
+        render(state);
+        revealActivity();
+      }
+
+      scrubber.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
+        body.classList.add('scrubbing');
+        revealActivity();
+      });
+
+      scrubber.addEventListener('pointerup', (event) => {
+        event.stopPropagation();
+        body.classList.remove('scrubbing');
+        jumpToPage(Number(pageSlider.value));
+      });
+
+      scrubber.addEventListener('pointercancel', () => {
+        body.classList.remove('scrubbing');
+        updateScrubber(state);
+      });
+
+      pageSlider.addEventListener('input', () => {
+        const page = Number(pageSlider.value);
+        scrubReadout.textContent = `${page} / ${PAGE_COUNT}`;
+        jumpToPage(page);
+      });
+
+      pageSlider.addEventListener('change', () => {
+        body.classList.remove('scrubbing');
+        jumpToPage(Number(pageSlider.value));
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+          event.preventDefault();
+          snap('next');
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+          event.preventDefault();
+          snap('prev');
+        }
+        if (event.key === 'Home') {
+          event.preventDefault();
+          state = 0;
+          render();
+        }
+        if (event.key === 'End') {
+          event.preventDefault();
+          state = END_STATE;
+          render();
+        }
+      });
+
+      let wheelLock = false;
+      window.addEventListener('wheel', (event) => {
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (Math.abs(delta) < 18) return;
+        event.preventDefault();
+        if (wheelLock || turn) return;
+        wheelLock = true;
+        snap(delta > 0 ? 'next' : 'prev');
+        window.setTimeout(() => { wheelLock = false; }, 720);
+      }, { passive: false });
+
+      window.addEventListener('resize', () => {
+        render(state, true);
+      });
+
+      async function loadImage(index) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.decoding = 'async';
+          img.loading = 'eager';
+          img.onload = async () => {
+            loaded.add(index);
+            imageStore[index] = img;
+            loader.textContent = `Loading ${Math.round((loaded.size / PAGE_COUNT) * 100)}%`;
+            try {
+              if (img.decode) await img.decode();
+            } catch (_) {}
+            resolve();
+          };
+          img.onerror = () => {
+            loaded.add(index);
+            loader.textContent = `Loading ${Math.round((loaded.size / PAGE_COUNT) * 100)}%`;
+            resolve();
+          };
+          img.src = pagePath(index);
+        });
+      }
+
+      async function boot() {
+        render(0, true);
+        await Promise.all(Array.from({ length: PAGE_COUNT }, (_, index) => loadImage(index)));
+        ready = true;
+        render(0, true);
+        body.classList.add('ready');
+        revealActivity();
+        window.setTimeout(() => body.classList.add('idle'), 2200);
+      }
+
+      boot();
+    })();
+  </script>
+</body>
+</html>
